@@ -1,0 +1,165 @@
+{
+  "name": "checkpoints",
+  "displayName": "Checkpoints",
+  "description": "One-click checkpoints: save, restore, and experiment fearlessly with AI",
+  "version": "1.0.1",
+  "publisher": "pritam-ajmire",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:checkpoints.save",
+    "onCommand:checkpoints.saveQuick",
+    "onCommand:checkpoints.list",
+    "onCommand:checkpoints.restore",
+    "onCommand:checkpoints.check",
+    "onCommand:checkpoints.clean"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "checkpoints.save",
+        "title": "Save Checkpoint",
+        "category": "Checkpoints",
+        "icon": "$(save)"
+      },
+      {
+        "command": "checkpoints.saveQuick",
+        "title": "Quick Checkpoint",
+        "category": "Checkpoints",
+        "icon": "$(save-all)"
+      },
+      {
+        "command": "checkpoints.list",
+        "title": "List Checkpoints",
+        "category": "Checkpoints",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "checkpoints.restore",
+        "title": "Restore Checkpoint",
+        "category": "Checkpoints",
+        "icon": "$(history)"
+      },
+      {
+        "command": "checkpoints.check",
+        "title": "Check Code Quality",
+        "category": "Checkpoints",
+        "icon": "$(check)"
+      },
+      {
+        "command": "checkpoints.clean",
+        "title": "Clean Old Checkpoints",
+        "category": "Checkpoints",
+        "icon": "$(trash)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "checkpoints.saveQuick",
+        "key": "ctrl+shift+s",
+        "mac": "cmd+shift+s",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "checkpoints.list",
+        "key": "ctrl+shift+l",
+        "mac": "cmd+shift+l"
+      },
+      {
+        "command": "checkpoints.restore",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "checkpointsView",
+          "name": "Checkpoints",
+          "when": "checkpoints.enabled"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "checkpoints",
+          "title": "Checkpoints",
+          "icon": "$(save-all)"
+        }
+      ]
+    },
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "checkpoints.save"
+        },
+        {
+          "command": "checkpoints.saveQuick"
+        },
+        {
+          "command": "checkpoints.list"
+        },
+        {
+          "command": "checkpoints.restore"
+        },
+        {
+          "command": "checkpoints.check"
+        },
+        {
+          "command": "checkpoints.clean"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "checkpoints.saveQuick",
+          "group": "navigation",
+          "when": "checkpoints.enabled"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "compile:tests": "tsc --project test/tsconfig.json",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run compile:tests && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./test-out/runTest.js",
+    "test:unit": "npm run compile && npm run compile:tests && mocha test-out/suite/*.test.js",
+    "test:watch": "npm run compile && npm run compile:tests && mocha test-out/suite/*.test.js --watch",
+    "coverage": "nyc npm run test",
+    "clean:tests": "rm -rf test-out"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.0",
+    "@types/node": "^16.18.126",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@vscode/test-electron": "^2.3.0",
+    "eslint": "^8.0.0",
+    "mocha": "^10.0.0",
+    "nyc": "^15.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^4.9.5"
+  },
+  "keywords": [
+    "checkpoint",
+    "backup",
+    "ai-coding",
+    "version-control",
+    "save-restore",
+    "development",
+    "productivity"
+  ],
+  "author": "Pritam Ajmire",
+  "license": "MIT"
+}

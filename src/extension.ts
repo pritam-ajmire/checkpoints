@@ -1,11 +1,24 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as crypto from 'crypto';
 
 interface CheckpointMetadata {
     timestamp: string;
     description: string;
     fileCount: number;
+    isIncremental?: boolean;
+    baseCheckpoint?: string;
+    changedFiles?: string[];
+    totalSize?: number;
+    incrementalSize?: number;
+}
+
+interface FileInfo {
+    path: string;
+    size: number;
+    mtime: number;
+    hash: string;
 }
 
 interface CheckpointsData {
@@ -20,15 +33,43 @@ class CheckpointItem {
     ) {}
 
     get tooltip(): string {
-        return `${this.name} - ${this.metadata.description || 'No description'}`;
+        let tooltip = `${this.name} - ${this.metadata.description || 'No description'}`;
+        
+        if (this.metadata.isIncremental) {
+            tooltip += `\n📊 Incremental checkpoint (${this.metadata.changedFiles?.length || 0} changed files)`;
+            tooltip += `\n🔗 Based on: ${this.metadata.baseCheckpoint}`;
+            if (this.metadata.incrementalSize) {
+                tooltip += `\n💾 Size: ${this.formatBytes(this.metadata.incrementalSize)}`;
+            }
+        } else {
+            if (this.metadata.totalSize) {
+                tooltip += `\n💾 Size: ${this.formatBytes(this.metadata.totalSize)}`;
+            }
+        }
+        
+        return tooltip;
     }
 
     get description(): string {
-        return this.metadata.description || 'No description';
+        let description = this.metadata.description || 'No description';
+        
+        if (this.metadata.isIncremental) {
+            description += ` (${this.metadata.changedFiles?.length || 0} changes)`;
+        }
+        
+        return description;
+    }
+
+    private formatBytes(bytes: number): string {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
     get iconPath(): vscode.ThemeIcon {
-        return new vscode.ThemeIcon('save');
+        return new vscode.ThemeIcon(this.metadata.isIncremental ? 'diff-added' : 'save');
     }
 
     get contextValue(): string {
@@ -102,6 +143,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Register all commands
     const commands = [
         vscode.commands.registerCommand('checkpoints.save', saveCheckpoint),
+        vscode.commands.registerCommand('checkpoints.saveFull', saveFullCheckpoint),
         vscode.commands.registerCommand('checkpoints.saveQuick', saveQuickCheckpoint),
         vscode.commands.registerCommand('checkpoints.list', listCheckpoints),
         vscode.commands.registerCommand('checkpoints.restore', restoreCheckpoint),
@@ -113,6 +155,12 @@ export function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('checkpoints.deleteFromTree', async (item: CheckpointItem) => {
             await deleteCheckpointFromTree(item);
+        }),
+        vscode.commands.registerCommand('checkpoints.viewFiles', async (item: CheckpointItem) => {
+            await viewCheckpointFiles(item);
+        }),
+        vscode.commands.registerCommand('checkpoints.deleteAll', async () => {
+            await deleteAllCheckpoints();
         })
     ];
 
@@ -122,6 +170,7 @@ export function activate(context: vscode.ExtensionContext) {
     statusBarItem.tooltip = "Quick checkpoint (Cmd+Shift+S)";
     statusBarItem.command = 'checkpoints.saveQuick';
     statusBarItem.show();
+    
 
     // Add all to context
     context.subscriptions.push(...commands, statusBarItem, treeView);
@@ -174,6 +223,136 @@ class CheckpointManager {
         fs.writeFileSync(this.metadataFile, JSON.stringify(metadata, null, 2));
     }
 
+    private getFileInfo(filePath: string): FileInfo | null {
+        try {
+            const stat = fs.statSync(filePath);
+            return {
+                path: filePath,
+                size: stat.size,
+                mtime: stat.mtime.getTime(),
+                hash: this.calculateFileHash(filePath)
+            };
+        } catch {
+            return null;
+        }
+    }
+
+    private calculateFileHash(filePath: string): string {
+        try {
+            const content = fs.readFileSync(filePath);
+            return crypto.createHash('md5').update(content).digest('hex');
+        } catch {
+            return '';
+        }
+    }
+
+    private getChangedFiles(baseCheckpointPath: string): string[] {
+        const changedFiles: string[] = [];
+        const baseFiles = this.getFileList(baseCheckpointPath);
+        const currentFiles = this.getFileList(this.workspaceRoot);
+
+        console.log(`[DEBUG] Base checkpoint path: ${baseCheckpointPath}`);
+        console.log(`[DEBUG] Base files count: ${baseFiles.size}`);
+        console.log(`[DEBUG] Current files count: ${currentFiles.size}`);
+        console.log(`[DEBUG] Base files:`, Array.from(baseFiles.keys()));
+        console.log(`[DEBUG] Current files:`, Array.from(currentFiles.keys()));
+
+        // Check for new or modified files
+        for (const [relativePath, currentInfo] of currentFiles) {
+            const baseInfo = baseFiles.get(relativePath);
+            
+            if (!baseInfo) {
+                console.log(`[DEBUG] New file: ${relativePath}`);
+                changedFiles.push(relativePath);
+            } else {
+                // Check if file actually changed by comparing hash first (most reliable)
+                const hashChanged = currentInfo.hash !== baseInfo.hash;
+                const sizeChanged = currentInfo.size !== baseInfo.size;
+                
+                // Only consider it changed if hash or size changed (ignore mtime alone)
+                if (hashChanged || sizeChanged) {
+                    console.log(`[DEBUG] Modified file: ${relativePath} (hash: ${hashChanged ? 'changed' : 'same'}, size: ${currentInfo.size} vs ${baseInfo.size})`);
+                    changedFiles.push(relativePath);
+                }
+            }
+        }
+
+        console.log(`[DEBUG] Changed files: ${changedFiles.length}`, changedFiles);
+        return changedFiles;
+    }
+
+    private getFileList(dirPath: string, relativePath: string = ''): Map<string, FileInfo> {
+        const files = new Map<string, FileInfo>();
+        const excludePatterns = ['.checkpoints', '.git', 'node_modules', '__pycache__', '.vscode'];
+
+        try {
+            const items = fs.readdirSync(dirPath);
+            
+            for (const item of items) {
+                if (excludePatterns.includes(item)) continue;
+                
+                const fullPath = path.join(dirPath, item);
+                const itemRelativePath = relativePath ? path.join(relativePath, item) : item;
+                const stat = fs.statSync(fullPath);
+                
+                if (stat.isDirectory()) {
+                    const subFiles = this.getFileList(fullPath, itemRelativePath);
+                    for (const [subPath, subInfo] of subFiles) {
+                        files.set(subPath, subInfo);
+                    }
+                } else {
+                    const fileInfo = this.getFileInfo(fullPath);
+                    if (fileInfo) {
+                        // Normalize the relative path to use forward slashes for consistency
+                        const normalizedPath = itemRelativePath.replace(/\\/g, '/');
+                        files.set(normalizedPath, fileInfo);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error reading directory:', error);
+        }
+
+        return files;
+    }
+
+    private copyIncrementalFiles(changedFiles: string[], baseCheckpointPath: string, newCheckpointPath: string): number {
+        let fileCount = 0;
+        
+        for (const relativePath of changedFiles) {
+            // Convert normalized path back to system path
+            const systemPath = relativePath.replace(/\//g, path.sep);
+            const srcPath = path.join(this.workspaceRoot, systemPath);
+            const destPath = path.join(newCheckpointPath, systemPath);
+            
+            try {
+                // Ensure destination directory exists
+                const destDir = path.dirname(destPath);
+                if (!fs.existsSync(destDir)) {
+                    fs.mkdirSync(destDir, { recursive: true });
+                }
+                
+                // Copy the file
+                fs.copyFileSync(srcPath, destPath);
+                fileCount++;
+                console.log(`[DEBUG] Copied file: ${systemPath}`);
+            } catch (error) {
+                console.error(`Error copying file ${systemPath}:`, error);
+            }
+        }
+        
+        return fileCount;
+    }
+
+    private getLastCheckpoint(): string | null {
+        const metadata = this.loadMetadata();
+        const checkpoints = Object.entries(metadata)
+            .filter(([, meta]) => !meta.isIncremental)
+            .sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
+        
+        return checkpoints.length > 0 ? checkpoints[0][0] : null;
+    }
+
     private copyDirectory(src: string, dest: string, excludePatterns: string[] = ['.checkpoints', '.git', 'node_modules', '__pycache__']): number {
         let fileCount = 0;
         
@@ -184,7 +363,9 @@ class CheckpointManager {
         const items = fs.readdirSync(src);
         
         for (const item of items) {
-            if (excludePatterns.includes(item)) {continue;}
+            if (excludePatterns.includes(item)) {
+            continue;
+        }
             
             const srcPath = path.join(src, item);
             const destPath = path.join(dest, item);
@@ -204,21 +385,32 @@ class CheckpointManager {
     private removeDirectory(dirPath: string): void {
         if (!fs.existsSync(dirPath)) {return;}
         
-        const items = fs.readdirSync(dirPath);
-        for (const item of items) {
-            const itemPath = path.join(dirPath, item);
-            const stat = fs.statSync(itemPath);
-            
-            if (stat.isDirectory()) {
-                this.removeDirectory(itemPath);
-            } else {
-                fs.unlinkSync(itemPath);
+        try {
+            // Use fs.rmSync with recursive option for better reliability
+            fs.rmSync(dirPath, { recursive: true, force: true });
+        } catch (error) {
+            console.error(`Error removing directory ${dirPath}:`, error);
+            // Fallback to manual removal
+            const items = fs.readdirSync(dirPath);
+            for (const item of items) {
+                const itemPath = path.join(dirPath, item);
+                const stat = fs.statSync(itemPath);
+                
+                if (stat.isDirectory()) {
+                    this.removeDirectory(itemPath);
+                } else {
+                    fs.unlinkSync(itemPath);
+                }
+            }
+            try {
+                fs.rmdirSync(dirPath);
+            } catch (rmError) {
+                console.error(`Error removing directory ${dirPath}:`, rmError);
             }
         }
-        fs.rmdirSync(dirPath);
     }
 
-    saveCheckpoint(name: string, description: string): boolean {
+    saveCheckpoint(name: string, description: string, forceFull: boolean = false): boolean {
         try {
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
             const checkpointPath = path.join(this.checkpointDir, name);
@@ -228,15 +420,70 @@ class CheckpointManager {
                 this.removeDirectory(checkpointPath);
             }
             
-            // Copy current state
-            const fileCount = this.copyDirectory(this.workspaceRoot, checkpointPath);
+            let fileCount = 0;
+            let isIncremental = false;
+            let baseCheckpoint: string | undefined;
+            let changedFiles: string[] = [];
+            let totalSize = 0;
+            let incrementalSize = 0;
+            
+            // Check if we can create an incremental checkpoint
+            if (!forceFull) {
+                const lastCheckpoint = this.getLastCheckpoint();
+                console.log(`[DEBUG] Last checkpoint: ${lastCheckpoint}`);
+                
+                if (lastCheckpoint) {
+                    const baseCheckpointPath = path.join(this.checkpointDir, lastCheckpoint);
+                    console.log(`[DEBUG] Base checkpoint path: ${baseCheckpointPath}`);
+                    console.log(`[DEBUG] Base checkpoint exists: ${fs.existsSync(baseCheckpointPath)}`);
+                    
+                    if (fs.existsSync(baseCheckpointPath)) {
+                        changedFiles = this.getChangedFiles(baseCheckpointPath);
+                        
+                        console.log(`[DEBUG] Changed files count: ${changedFiles.length}`);
+                        console.log(`[DEBUG] Threshold check: ${changedFiles.length > 0 && changedFiles.length < 100}`);
+                        
+                        // Only create incremental if there are changes and it's worth it
+                        if (changedFiles.length > 0 && changedFiles.length < 100) { // Threshold for incremental
+                            console.log(`[DEBUG] Creating incremental checkpoint`);
+                            isIncremental = true;
+                            baseCheckpoint = lastCheckpoint;
+                            
+                            // Copy only changed files
+                            fileCount = this.copyIncrementalFiles(changedFiles, baseCheckpointPath, checkpointPath);
+                            
+                            // Calculate sizes
+                            incrementalSize = this.calculateDirectorySize(checkpointPath);
+                            totalSize = this.calculateDirectorySize(baseCheckpointPath) + incrementalSize;
+                        } else {
+                            console.log(`[DEBUG] Not creating incremental: changedFiles=${changedFiles.length}, threshold=${changedFiles.length < 100}`);
+                        }
+                    }
+                } else {
+                    console.log(`[DEBUG] No last checkpoint found`);
+                }
+            } else {
+                console.log(`[DEBUG] Force full checkpoint`);
+            }
+            
+            // If not incremental or incremental failed, do full copy
+            if (!isIncremental) {
+                fileCount = this.copyDirectory(this.workspaceRoot, checkpointPath);
+                totalSize = this.calculateDirectorySize(checkpointPath);
+                incrementalSize = totalSize;
+            }
             
             // Update metadata
             const metadata = this.loadMetadata();
             metadata[name] = {
                 timestamp,
                 description,
-                fileCount
+                fileCount,
+                isIncremental,
+                baseCheckpoint,
+                changedFiles: isIncremental ? changedFiles : undefined,
+                totalSize,
+                incrementalSize
             };
             this.saveMetadata(metadata);
             
@@ -245,6 +492,28 @@ class CheckpointManager {
             console.error('Error saving checkpoint:', error);
             return false;
         }
+    }
+
+    private calculateDirectorySize(dirPath: string): number {
+        let totalSize = 0;
+        
+        try {
+            const items = fs.readdirSync(dirPath);
+            for (const item of items) {
+                const itemPath = path.join(dirPath, item);
+                const stat = fs.statSync(itemPath);
+                
+                if (stat.isDirectory()) {
+                    totalSize += this.calculateDirectorySize(itemPath);
+                } else {
+                    totalSize += stat.size;
+                }
+            }
+        } catch (error) {
+            console.error('Error calculating directory size:', error);
+        }
+        
+        return totalSize;
     }
 
     listCheckpoints(): CheckpointsData {
@@ -263,10 +532,73 @@ class CheckpointManager {
             const backupName = `auto_backup_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)}`;
             this.saveCheckpoint(backupName, 'Auto-backup before restore');
             
+            // Get checkpoint metadata
+            const metadata = this.loadMetadata();
+            const checkpointMeta = metadata[name];
+            
+            if (checkpointMeta?.isIncremental && checkpointMeta.baseCheckpoint) {
+                // Restore incremental checkpoint
+                return this.restoreIncrementalCheckpoint(name, checkpointMeta);
+            } else {
+                // Restore full checkpoint
+                return this.restoreFullCheckpoint(checkpointPath);
+            }
+        } catch (error) {
+            console.error('Error restoring checkpoint:', error);
+            return false;
+        }
+    }
+
+    private restoreIncrementalCheckpoint(name: string, metadata: CheckpointMetadata): boolean {
+        try {
+            if (!metadata.baseCheckpoint || !metadata.changedFiles) {
+                return false;
+            }
+            
+            const baseCheckpointPath = path.join(this.checkpointDir, metadata.baseCheckpoint);
+            if (!fs.existsSync(baseCheckpointPath)) {
+                console.error('Base checkpoint not found:', metadata.baseCheckpoint);
+                return false;
+            }
+            
+            // First restore the base checkpoint
+            if (!this.restoreFullCheckpoint(baseCheckpointPath)) {
+                return false;
+            }
+            
+            // Then apply the incremental changes
+            const incrementalPath = path.join(this.checkpointDir, name);
+            for (const relativePath of metadata.changedFiles) {
+                const srcPath = path.join(incrementalPath, relativePath);
+                const destPath = path.join(this.workspaceRoot, relativePath);
+                
+                if (fs.existsSync(srcPath)) {
+                    // Ensure destination directory exists
+                    const destDir = path.dirname(destPath);
+                    if (!fs.existsSync(destDir)) {
+                        fs.mkdirSync(destDir, { recursive: true });
+                    }
+                    
+                    // Copy the file
+                    fs.copyFileSync(srcPath, destPath);
+                }
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Error restoring incremental checkpoint:', error);
+            return false;
+        }
+    }
+
+    private restoreFullCheckpoint(checkpointPath: string): boolean {
+        try {
             // Clear current files (except .checkpoints and .git)
             const items = fs.readdirSync(this.workspaceRoot);
             for (const item of items) {
-                if (item === '.checkpoints' || item === '.git') {continue;}
+                if (item === '.checkpoints' || item === '.git') {
+                    continue;
+                }
                 
                 const itemPath = path.join(this.workspaceRoot, item);
                 const stat = fs.statSync(itemPath);
@@ -283,7 +615,7 @@ class CheckpointManager {
             
             return true;
         } catch (error) {
-            console.error('Error restoring checkpoint:', error);
+            console.error('Error restoring full checkpoint:', error);
             return false;
         }
     }
@@ -291,17 +623,27 @@ class CheckpointManager {
     deleteCheckpoint(name: string): boolean {
         try {
             const checkpointPath = path.join(this.checkpointDir, name);
-            
+            console.log(`[DEBUG] Attempting to delete checkpoint: ${name} at ${checkpointPath}`);
+              
             if (!fs.existsSync(checkpointPath)) {
+                console.log(`[DEBUG] Checkpoint directory does not exist: ${checkpointPath}`);
                 return false;
             }
             
+            console.log(`[DEBUG] Removing checkpoint directory: ${checkpointPath}`);
             this.removeDirectory(checkpointPath);
+            
+            // Verify directory was removed
+            if (fs.existsSync(checkpointPath)) {
+                console.error(`[DEBUG] Failed to remove checkpoint directory: ${checkpointPath}`);
+                return false;
+            }
             
             const metadata = this.loadMetadata();
             delete metadata[name];
             this.saveMetadata(metadata);
             
+            console.log(`[DEBUG] Successfully deleted checkpoint: ${name}`);
             return true;
         } catch (error) {
             console.error('Error deleting checkpoint:', error);
@@ -369,7 +711,7 @@ async function saveCheckpoint() {
             const success = manager.saveCheckpoint(name, description || '');
             
             if (success) {
-                vscode.window.showInformationMessage(`✅ Checkpoint "${name}" created successfully!`);
+                showAutoHideMessage(`✅ Checkpoint "${name}" created successfully!`);
                 checkpointsProvider.refresh();
             } else {
                 vscode.window.showErrorMessage(`Failed to create checkpoint "${name}"`);
@@ -377,6 +719,42 @@ async function saveCheckpoint() {
         });
     } catch (error) {
         vscode.window.showErrorMessage(`Failed to create checkpoint: ${error}`);
+    }
+}
+
+async function saveFullCheckpoint() {
+    const name = await vscode.window.showInputBox({
+        prompt: 'Enter checkpoint name (Full checkpoint)',
+        placeHolder: 'e.g., major_refactor_complete'
+    });
+
+    if (!name) {return;}
+
+    const description = await vscode.window.showInputBox({
+        prompt: 'Enter checkpoint description (optional)',
+        placeHolder: 'e.g., Complete refactor of authentication system'
+    });
+
+    const manager = await getCheckpointManager();
+    if (!manager) {return;}
+
+    try {
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: `Creating full checkpoint "${name}"...`,
+            cancellable: false
+        }, async () => {
+            const success = manager.saveCheckpoint(name, description || '', true); // Force full checkpoint
+            
+            if (success) {
+                showAutoHideMessage(`✅ Full checkpoint "${name}" created successfully!`);
+                checkpointsProvider.refresh();
+            } else {
+                vscode.window.showErrorMessage(`Failed to create full checkpoint "${name}"`);
+            }
+        });
+    } catch (error) {
+        vscode.window.showErrorMessage(`Failed to create full checkpoint: ${error}`);
     }
 }
 
@@ -396,7 +774,7 @@ async function saveQuickCheckpoint() {
             const success = manager.saveCheckpoint(name, 'Quick checkpoint');
             
             if (success) {
-                vscode.window.showInformationMessage(`✅ Quick checkpoint created: ${name}`);
+                showAutoHideMessage(`✅ Checkpoint created: ${name}`);
                 checkpointsProvider.refresh();
             } else {
                 vscode.window.showErrorMessage(`Failed to create quick checkpoint`);
@@ -483,7 +861,7 @@ async function restoreCheckpoint() {
                 const success = manager.restoreCheckpoint(selected.label);
                 
                 if (success) {
-                    vscode.window.showInformationMessage(`✅ Restored from checkpoint "${selected.label}"`);
+                    showAutoHideMessage(`✅ Restored from checkpoint "${selected.label}"`);
                     checkpointsProvider.refresh();
                     
                     // Reload the workspace
@@ -555,7 +933,7 @@ async function restoreCheckpointFromTree(item: CheckpointItem) {
                 const success = manager.restoreCheckpoint(item.name);
                 
                 if (success) {
-                    vscode.window.showInformationMessage(`✅ Restored from checkpoint "${item.name}"`);
+                    showAutoHideMessage(`✅ Restored from checkpoint "${item.name}"`);
                     checkpointsProvider.refresh();
                     
                     // Reload the workspace
@@ -572,7 +950,10 @@ async function restoreCheckpointFromTree(item: CheckpointItem) {
 
 async function deleteCheckpointFromTree(item: CheckpointItem) {
     const manager = await getCheckpointManager();
-    if (!manager) {return;}
+    if (!manager) {
+        vscode.window.showErrorMessage('Checkpoint manager not available');
+        return;
+    }
 
     // Confirm deletion
     const confirm = await vscode.window.showWarningMessage(
@@ -583,18 +964,193 @@ async function deleteCheckpointFromTree(item: CheckpointItem) {
 
     if (confirm === 'Yes, Delete') {
         try {
+            console.log(`[DEBUG] User confirmed deletion of checkpoint: ${item.name}`);
             const success = manager.deleteCheckpoint(item.name);
             
             if (success) {
-                vscode.window.showInformationMessage(`✅ Deleted checkpoint "${item.name}"`);
+                showAutoHideMessage(`✅ Deleted checkpoint "${item.name}"`);
                 checkpointsProvider.refresh();
             } else {
-                vscode.window.showErrorMessage(`Failed to delete checkpoint "${item.name}"`);
+                vscode.window.showErrorMessage(`Failed to delete checkpoint "${item.name}". Check the console for details.`);
             }
         } catch (error) {
+            console.error(`[DEBUG] Error in deleteCheckpointFromTree:`, error);
             vscode.window.showErrorMessage(`Failed to delete checkpoint: ${error}`);
         }
+    } else {
+        console.log(`[DEBUG] User cancelled deletion of checkpoint: ${item.name}`);
     }
+}
+
+async function viewCheckpointFiles(item: CheckpointItem) {
+    const manager = await getCheckpointManager();
+    if (!manager) {
+        vscode.window.showErrorMessage('Checkpoint manager not available');
+        return;
+    }
+
+    try {
+        const checkpointPath = path.join(manager['checkpointDir'], item.name);
+        
+        if (!fs.existsSync(checkpointPath)) {
+            vscode.window.showErrorMessage(`Checkpoint "${item.name}" not found`);
+            return;
+        }
+
+        // Get list of files in the checkpoint
+        const files = getFilesInDirectory(checkpointPath);
+        
+        // Create a webview to display the files
+        const panel = vscode.window.createWebviewPanel(
+            'checkpointFiles',
+            `Files in ${item.name}`,
+            vscode.ViewColumn.One,
+            { enableScripts: true }
+        );
+
+        panel.webview.html = getWebviewContent(item.name, files);
+        
+        // Handle messages from the webview
+        panel.webview.onDidReceiveMessage(async (message) => {
+            if (message.command === 'openFile') {
+                const filePath = path.join(checkpointPath, message.filePath);
+                if (fs.existsSync(filePath)) {
+                    const doc = await vscode.workspace.openTextDocument(filePath);
+                    await vscode.window.showTextDocument(doc);
+                }
+            }
+        });
+
+    } catch (error) {
+        vscode.window.showErrorMessage(`Failed to view checkpoint files: ${error}`);
+    }
+}
+
+async function deleteAllCheckpoints() {
+    const manager = await getCheckpointManager();
+    if (!manager) {
+        vscode.window.showErrorMessage('Checkpoint manager not available');
+        return;
+    }
+
+    // Confirm deletion
+    const confirm = await vscode.window.showWarningMessage(
+        `Are you sure you want to delete ALL checkpoints? This action cannot be undone.`,
+        { modal: true },
+        'Yes, Delete All'
+    );
+
+    if (confirm === 'Yes, Delete All') {
+        try {
+            const metadata = manager['loadMetadata']();
+            const checkpointCount = Object.keys(metadata).length;
+            
+            if (checkpointCount === 0) {
+                vscode.window.showInformationMessage('No checkpoints to delete');
+                return;
+            }
+
+            // Delete all checkpoints
+            let deletedCount = 0;
+            for (const name of Object.keys(metadata)) {
+                if (manager.deleteCheckpoint(name)) {
+                    deletedCount++;
+                }
+            }
+
+            showAutoHideMessage(`✅ Deleted ${deletedCount} checkpoints`);
+            checkpointsProvider.refresh();
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to delete all checkpoints: ${error}`);
+        }
+    }
+}
+
+function getFilesInDirectory(dirPath: string, relativePath: string = ''): string[] {
+    const files: string[] = [];
+    const excludePatterns = ['.checkpoints', '.git', 'node_modules', '__pycache__', '.vscode'];
+
+    try {
+        const items = fs.readdirSync(dirPath);
+        
+        for (const item of items) {
+            if (excludePatterns.includes(item)) continue;
+            
+            const fullPath = path.join(dirPath, item);
+            const itemRelativePath = relativePath ? path.join(relativePath, item) : item;
+            const stat = fs.statSync(fullPath);
+            
+            if (stat.isDirectory()) {
+                files.push(...getFilesInDirectory(fullPath, itemRelativePath));
+            } else {
+                files.push(itemRelativePath);
+            }
+        }
+    } catch (error) {
+        console.error('Error reading directory:', error);
+    }
+
+    return files.sort();
+}
+
+function getWebviewContent(checkpointName: string, files: string[]): string {
+    const fileList = files.map(file => 
+        `<div class="file-item" onclick="openFile('${file}')">
+            <span class="file-icon">${file.includes('.') ? '📄' : '📁'}</span>
+            <span class="file-name">${file}</span>
+        </div>`
+    ).join('');
+
+    return `<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Files in ${checkpointName}</title>
+        <style>
+            body { font-family: var(--vscode-font-family); padding: 20px; }
+            .file-item { 
+                display: flex; 
+                align-items: center; 
+                padding: 8px; 
+                cursor: pointer; 
+                border-radius: 4px;
+                margin: 2px 0;
+            }
+            .file-item:hover { background-color: var(--vscode-list-hoverBackground); }
+            .file-icon { margin-right: 8px; font-size: 16px; }
+            .file-name { font-family: var(--vscode-editor-font-family); }
+            .header { margin-bottom: 20px; }
+            .count { color: var(--vscode-descriptionForeground); }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h2>Files in ${checkpointName}</h2>
+            <p class="count">${files.length} files</p>
+        </div>
+        <div class="file-list">
+            ${fileList}
+        </div>
+        <script>
+            const vscode = acquireVsCodeApi();
+            function openFile(filePath) {
+                vscode.postMessage({ command: 'openFile', filePath: filePath });
+            }
+        </script>
+    </body>
+    </html>`;
+}
+
+function showAutoHideMessage(message: string, duration: number = 3000) {
+    const tempStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
+    tempStatusBar.text = message;
+    tempStatusBar.show();
+    
+    setTimeout(() => {
+        tempStatusBar.hide();
+        tempStatusBar.dispose();
+    }, duration);
 }
 
 export function deactivate() {

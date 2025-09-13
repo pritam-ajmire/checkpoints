@@ -1,8 +1,8 @@
 {
   "name": "checkpoints",
   "displayName": "Checkpoints",
-  "description": "One-click checkpoints: save, restore, and experiment fearlessly with AI",
-  "version": "1.0.1",
+  "description": "One-click checkpoints: save, restore, and experiment fearlessly with AI.",
+  "version": "1.1.2",
   "publisher": "pritam-ajmire",
   "engines": {
     "vscode": "^1.74.0"
@@ -13,6 +13,7 @@
   "activationEvents": [
     "onStartupFinished",
     "onCommand:checkpoints.save",
+    "onCommand:checkpoints.saveFull",
     "onCommand:checkpoints.saveQuick",
     "onCommand:checkpoints.list",
     "onCommand:checkpoints.restore",
@@ -20,7 +21,9 @@
     "onCommand:checkpoints.clean",
     "onCommand:checkpoints.refresh",
     "onCommand:checkpoints.restoreFromTree",
-    "onCommand:checkpoints.deleteFromTree"
+    "onCommand:checkpoints.deleteFromTree",
+    "onCommand:checkpoints.viewFiles",
+    "onCommand:checkpoints.deleteAll"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -30,6 +33,12 @@
         "title": "Save Checkpoint",
         "category": "Checkpoints",
         "icon": "$(save)"
+      },
+      {
+        "command": "checkpoints.saveFull",
+        "title": "Save Full Checkpoint",
+        "category": "Checkpoints",
+        "icon": "$(save-all)"
       },
       {
         "command": "checkpoints.saveQuick",
@@ -76,6 +85,18 @@
       {
         "command": "checkpoints.deleteFromTree",
         "title": "Delete Checkpoint",
+        "category": "Checkpoints",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "checkpoints.viewFiles",
+        "title": "View Files",
+        "category": "Checkpoints",
+        "icon": "$(file-directory)"
+      },
+      {
+        "command": "checkpoints.deleteAll",
+        "title": "Delete All Checkpoints",
         "category": "Checkpoints",
         "icon": "$(trash)"
       }
@@ -149,6 +170,11 @@
           "command": "checkpoints.refresh",
           "when": "view == checkpointsView",
           "group": "navigation"
+        },
+        {
+          "command": "checkpoints.deleteAll",
+          "when": "view == checkpointsView",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -159,6 +185,11 @@
         },
         {
           "command": "checkpoints.deleteFromTree",
+          "when": "view == checkpointsView && viewItem == checkpoint",
+          "group": "inline"
+        },
+        {
+          "command": "checkpoints.viewFiles",
           "when": "view == checkpointsView && viewItem == checkpoint",
           "group": "inline"
         }
@@ -194,11 +225,14 @@
   "keywords": [
     "checkpoint",
     "backup",
+    "incremental",
     "ai-coding",
     "version-control",
     "save-restore",
     "development",
-    "productivity"
+    "productivity",
+    "performance",
+    "large-projects"
   ],
   "author": "Pritam Ajmire",
   "license": "MIT",

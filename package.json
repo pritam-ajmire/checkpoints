@@ -1,12 +1,14 @@
 {
   "name": "code-checkpoints",
   "displayName": "Code Checkpoints",
-  "description": "One-click code checkpoints: save, restore, and experiment fearlessly with AI.",
+  "description": "One-click code checkpoints: save, restore, and experiment fearlessly with AI. Perfect for Cursor, VS Code, and AI-assisted coding.",
   "version": "1.1.2",
   "publisher": "pritam-ajmire",
   "engines": {
     "vscode": "^1.74.0"
   },
+  "extensionDependencies": [],
+  "extensionPack": [],
   "categories": [
     "Other"
   ],
@@ -232,7 +234,11 @@
     "development",
     "productivity",
     "performance",
-    "large-projects"
+    "large-projects",
+    "cursor",
+    "cursor-ai",
+    "vscode",
+    "ai-assistant"
   ],
   "author": "Pritam Ajmire",
   "license": "MIT",

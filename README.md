@@ -2,7 +2,7 @@
 
 **One-click code checkpoints: save, restore, and experiment fearlessly with AI.**
 
-When working with AI assistants like Copilot, Claude, or ChatGPT, you often try multiple code suggestions rapidly. But what happens when an AI-generated change breaks your working code? Rolling back through git commits is slow and disruptive. You need **instant, hassle-free checkpoints** that let you experiment boldly and restore quickly when things go wrong.
+Perfect for **Cursor**, **VS Code**, and **AI-assisted coding**! When working with AI assistants like Copilot, Claude, or ChatGPT, you often try multiple code suggestions rapidly. But what happens when an AI-generated change breaks your working code? Rolling back through git commits is slow and disruptive. You need **instant, hassle-free checkpoints** that let you experiment boldly and restore quickly when things go wrong.
 
 This extension creates **checkpoints** of your entire project, working independently of git with zero setup required.
 
@@ -51,6 +51,14 @@ Perfect for AI-assisted coding where you need frequent, reliable save points wit
 
 - **None!** The extension is completely self-contained
 
+## Cursor Compatibility
+
+✅ **Fully compatible with Cursor!** This extension works seamlessly in:
+- **Cursor** (recommended for AI coding)
+- **VS Code** 
+
+The extension uses standard VS Code APIs, so it works identically in both editors. Perfect for AI-assisted development workflows!
+
 ## Usage
 
 1. Install the extension
@@ -60,16 +68,24 @@ Perfect for AI-assisted coding where you need frequent, reliable save points wit
 
 ## Installation
 
-1. Download from the Visual Studio Marketplace Or search for "Code Checkpoints" in VSCode's Extensions view and install.
-2. Open VS Code or Cursor
-3. Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
+### For Cursor Users:
+1. Open Cursor
+2. Go to Extensions (Cmd+Shift+X / Ctrl+Shift+X)
+3. Search for "Code Checkpoints" and install
+4. Or install from [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=pritam-ajmire.code-checkpoints)
+
+### For VS Code Users:
+1. Open VS Code
+2. Go to Extensions (Cmd+Shift+X / Ctrl+Shift+X)  
+3. Search for "Code Checkpoints" and install
+4. Or install from [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=pritam-ajmire.code-checkpoints)
+
+### Quick Start:
+1. Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
+2. Type "Code Checkpoints" to see all available commands
 
 
 ## How It Works
 
 The extension creates a `.vscode/checkpoints` folder in your workspace to store snapshots of your entire project. Each checkpoint is a complete copy of your files at that moment, with metadata about when it was created and what it contains. This folder is automatically ignored by git and most development tools to keep your project clean.
 
-## For Developers
-
-- **Developer Guide**: See DEV-README.md for setup, testing, and contributing
-- **Package Details**: See PACKAGE_INFO.md for technical specifications

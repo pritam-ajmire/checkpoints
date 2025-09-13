@@ -196,7 +196,7 @@ class CheckpointManager {
 
     constructor(workspaceRoot: string) {
         this.workspaceRoot = workspaceRoot;
-        this.checkpointDir = path.join(workspaceRoot, '.checkpoints');
+        this.checkpointDir = path.join(workspaceRoot, '.vscode', 'checkpoints');
         this.metadataFile = path.join(this.checkpointDir, 'metadata.json');
         this.ensureCheckpointDir();
     }
@@ -283,7 +283,7 @@ class CheckpointManager {
 
     private getFileList(dirPath: string, relativePath: string = ''): Map<string, FileInfo> {
         const files = new Map<string, FileInfo>();
-        const excludePatterns = ['.checkpoints', '.git', 'node_modules', '__pycache__', '.vscode'];
+        const excludePatterns = ['.git', 'node_modules', '__pycache__', '.vscode'];
 
         try {
             const items = fs.readdirSync(dirPath);
@@ -353,7 +353,7 @@ class CheckpointManager {
         return checkpoints.length > 0 ? checkpoints[0][0] : null;
     }
 
-    private copyDirectory(src: string, dest: string, excludePatterns: string[] = ['.checkpoints', '.git', 'node_modules', '__pycache__']): number {
+    private copyDirectory(src: string, dest: string, excludePatterns: string[] = ['.git', 'node_modules', '__pycache__', '.vscode']): number {
         let fileCount = 0;
         
         if (!fs.existsSync(dest)) {
@@ -593,10 +593,10 @@ class CheckpointManager {
 
     private restoreFullCheckpoint(checkpointPath: string): boolean {
         try {
-            // Clear current files (except .checkpoints and .git)
+            // Clear current files (except .vscode and .git)
             const items = fs.readdirSync(this.workspaceRoot);
             for (const item of items) {
-                if (item === '.checkpoints' || item === '.git') {
+                if (item === '.vscode' || item === '.git') {
                     continue;
                 }
                 

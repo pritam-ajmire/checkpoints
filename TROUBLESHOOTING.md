@@ -55,7 +55,7 @@ After installing, verify the extension works:
 1. **Open a workspace folder** (not just single files)
 2. **Check status bar** - Should see "Checkpoint" button
 3. **Test quick checkpoint**: Press `Cmd+Shift+S` / `Ctrl+Shift+S`
-4. **Verify checkpoint folder**: Look for `.checkpoints/` in workspace root
+4. **Verify checkpoint folder**: Look for `.vscode/checkpoints/` in workspace root
 
 ## Version Compatibility
 

@@ -1,6 +1,6 @@
-# Checkpoints Extension
+# Code Checkpoints Extension
 
-**One-click checkpoints: save, restore, and experiment fearlessly with AI.**
+**One-click code checkpoints: save, restore, and experiment fearlessly with AI.**
 
 When working with AI assistants like Copilot, Claude, or ChatGPT, you often try multiple code suggestions rapidly. But what happens when an AI-generated change breaks your working code? Rolling back through git commits is slow and disruptive. You need **instant, hassle-free checkpoints** that let you experiment boldly and restore quickly when things go wrong.
 
@@ -34,12 +34,12 @@ Perfect for AI-assisted coding where you need frequent, reliable save points wit
 
 ## Commands
 
-- `Checkpoints: Save Checkpoint` - Create a named checkpoint with description
-- `Checkpoints: Quick Checkpoint` - Create a timestamped checkpoint instantly
-- `Checkpoints: List Checkpoints` - View all available checkpoints
-- `Checkpoints: Restore Checkpoint` - Restore from a selected checkpoint
-- `Checkpoints: Check Code Quality` - Verify code complexity
-- `Checkpoints: Clean Old Checkpoints` - Remove old checkpoints
+- `Code Checkpoints: Save Checkpoint` - Create a named checkpoint with description
+- `Code Checkpoints: Quick Checkpoint` - Create a timestamped checkpoint instantly
+- `Code Checkpoints: List Checkpoints` - View all available checkpoints
+- `Code Checkpoints: Restore Checkpoint` - Restore from a selected checkpoint
+- `Code Checkpoints: Check Code Quality` - Verify code complexity
+- `Code Checkpoints: Clean Old Checkpoints` - Remove old checkpoints
 
 ## Keyboard Shortcuts
 
@@ -60,14 +60,14 @@ Perfect for AI-assisted coding where you need frequent, reliable save points wit
 
 ## Installation
 
-1. Download from the Visual Studio Marketplace Or search for "Checkpoints" in VSCode’s Extensions view and install.
+1. Download from the Visual Studio Marketplace Or search for "Code Checkpoints" in VSCode's Extensions view and install.
 2. Open VS Code or Cursor
 3. Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
 
 
 ## How It Works
 
-The extension creates a `.checkpoints` folder in your workspace to store snapshots of your entire project. Each checkpoint is a complete copy of your files at that moment, with metadata about when it was created and what it contains.
+The extension creates a `.vscode/checkpoints` folder in your workspace to store snapshots of your entire project. Each checkpoint is a complete copy of your files at that moment, with metadata about when it was created and what it contains. This folder is automatically ignored by git and most development tools to keep your project clean.
 
 ## For Developers
 

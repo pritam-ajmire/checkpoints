@@ -58,9 +58,9 @@ Or use the "Checkpoint" button in the status bar!
 
 ## 📁 File Structure
 
-The extension creates a `.checkpoints/` directory in your workspace with:
+The extension creates a `.vscode/checkpoints/` directory in your workspace with:
 ```
-.checkpoints/
+.vscode/checkpoints/
 ├── metadata.json              # Checkpoint information
 ├── checkpoint_name_1/         # Full project snapshot
 ├── checkpoint_name_2/         # Another snapshot

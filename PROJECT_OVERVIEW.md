@@ -50,7 +50,7 @@ checkpoints-extension/
 - ✅ **Cross-platform** - Windows, macOS, Linux
 - ✅ **Keyboard shortcuts** - Cmd+Shift+S/R/L
 - ✅ **Status bar integration** - Quick access button
-- ✅ **File system based** - .checkpoints directory
+- ✅ **File system based** - .vscode/checkpoints directory
 
 ### 🧪 Testing & Quality
 - ✅ **17 automated tests** (94% passing)

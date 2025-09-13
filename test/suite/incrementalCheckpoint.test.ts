@@ -12,7 +12,7 @@ class MockCheckpointManager {
 
     constructor(workspaceRoot: string) {
         this.workspaceRoot = workspaceRoot;
-        this.checkpointDir = path.join(workspaceRoot, '.checkpoints');
+        this.checkpointDir = path.join(workspaceRoot, '.vscode', 'checkpoints');
         this.metadataFile = path.join(this.checkpointDir, 'metadata.json');
         this.ensureCheckpointDir();
     }
@@ -99,7 +99,7 @@ class MockCheckpointManager {
 
     private getFileList(dirPath: string, relativePath: string = ''): Map<string, any> {
         const files = new Map<string, any>();
-        const excludePatterns = ['.checkpoints', '.git', 'node_modules', '__pycache__', '.vscode'];
+        const excludePatterns = ['.git', 'node_modules', '__pycache__', '.vscode'];
 
         try {
             const items = fs.readdirSync(dirPath);

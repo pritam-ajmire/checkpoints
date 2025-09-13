@@ -113,7 +113,7 @@ interface CheckpointsData {
 
 #### File System Layout
 ```
-.checkpoints/
+.vscode/checkpoints/
 ├── metadata.json           # CheckpointsData JSON
 ├── checkpoint_name_1/      # Full project copy
 │   ├── src/

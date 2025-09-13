@@ -1,37 +1,26 @@
-# Compiled output
-out/
-test-out/
-*.js
-*.js.map
-*.tsbuildinfo
-
-# Dependencies
-node_modules/
-
-# VS Code test environment
+# Checkpoints extension data
+.vscode/checkpoints/
 .vscode-test/
 
-# Build artifacts
-*.vsix
+# Node modules
+node_modules/
 
-# Coverage reports
-.nyc_output/
-coverage/
+# Build outputs
+out/
+test-out/
 
-# OS generated files
+# VS Code
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+
+# OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
 
-# Log files
+# Logs
 *.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
 # Runtime data
 pids
@@ -39,26 +28,48 @@ pids
 *.seed
 *.pid.lock
 
+# Coverage directory used by tools like istanbul
+coverage/
+
+# nyc test coverage
+.nyc_output
+
+# Dependency directories
+jspm_packages/
+
 # Optional npm cache directory
 .npm
 
-# Optional eslint cache
-.eslintcache
+# Optional REPL history
+.node_repl_history
 
-# IDE files
-.vscode/settings.json
-.vscode/launch.json
-.vscode/extensions.json
-.idea/
-*.swp
-*.swo
-*~
+# Output of 'npm pack'
+*.tgz
 
-# Temporary files
-*.tmp
-*.temp
+# Yarn Integrity file
+.yarn-integrity
 
-# Environment variables
+# dotenv environment variables file
 .env
-.env.local
-.env.*.local
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# next.js build output
+.next
+
+# nuxt.js build output
+.nuxt
+
+# vuepress build output
+.vuepress/dist
+
+# Serverless directories
+.serverless
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/

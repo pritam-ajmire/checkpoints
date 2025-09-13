@@ -12,11 +12,92 @@ interface CheckpointsData {
     [name: string]: CheckpointMetadata;
 }
 
+class CheckpointItem {
+    constructor(
+        public readonly name: string,
+        public readonly metadata: CheckpointMetadata,
+        public readonly collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None
+    ) {}
+
+    get tooltip(): string {
+        return `${this.name} - ${this.metadata.description || 'No description'}`;
+    }
+
+    get description(): string {
+        return this.metadata.description || 'No description';
+    }
+
+    get iconPath(): vscode.ThemeIcon {
+        return new vscode.ThemeIcon('save');
+    }
+
+    get contextValue(): string {
+        return 'checkpoint';
+    }
+}
+
+class CheckpointsProvider implements vscode.TreeDataProvider<CheckpointItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<CheckpointItem | undefined | null | void> = new vscode.EventEmitter<CheckpointItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<CheckpointItem | undefined | null | void> = this._onDidChangeTreeData.event;
+
+    private manager: CheckpointManager | undefined;
+
+    constructor() {
+        this.initializeManager();
+    }
+
+    private async initializeManager(): Promise<void> {
+        const workspaceRoot = await getWorkspaceRoot();
+        if (workspaceRoot) {
+            this.manager = new CheckpointManager(workspaceRoot);
+        }
+    }
+
+    refresh(): void {
+        this._onDidChangeTreeData.fire();
+    }
+
+    getTreeItem(element: CheckpointItem): vscode.TreeItem {
+        return element;
+    }
+
+    async getChildren(element?: CheckpointItem): Promise<CheckpointItem[]> {
+        if (!this.manager) {
+            await this.initializeManager();
+        }
+
+        if (!this.manager) {
+            return [];
+        }
+
+        if (!element) {
+            // Return root level items (all checkpoints)
+            const checkpoints = this.manager.listCheckpoints();
+            return Object.entries(checkpoints)
+                .sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp)) // Sort by newest first
+                .map(([name, metadata]) => new CheckpointItem(name, metadata));
+        }
+
+        return [];
+    }
+}
+
+// Global provider instance
+let checkpointsProvider: CheckpointsProvider;
+
 export function activate(context: vscode.ExtensionContext) {
     console.log('Checkpoints extension is now active!');
 
     // Set context for when extension is enabled
     vscode.commands.executeCommand('setContext', 'checkpoints.enabled', true);
+
+    // Create the checkpoints provider
+    checkpointsProvider = new CheckpointsProvider();
+
+    // Register the tree data provider
+    const treeView = vscode.window.createTreeView('checkpointsView', {
+        treeDataProvider: checkpointsProvider
+    });
 
     // Register all commands
     const commands = [
@@ -25,7 +106,14 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('checkpoints.list', listCheckpoints),
         vscode.commands.registerCommand('checkpoints.restore', restoreCheckpoint),
         vscode.commands.registerCommand('checkpoints.check', checkCodeQuality),
-        vscode.commands.registerCommand('checkpoints.clean', cleanCheckpoints)
+        vscode.commands.registerCommand('checkpoints.clean', cleanCheckpoints),
+        vscode.commands.registerCommand('checkpoints.refresh', () => checkpointsProvider.refresh()),
+        vscode.commands.registerCommand('checkpoints.restoreFromTree', async (item: CheckpointItem) => {
+            await restoreCheckpointFromTree(item);
+        }),
+        vscode.commands.registerCommand('checkpoints.deleteFromTree', async (item: CheckpointItem) => {
+            await deleteCheckpointFromTree(item);
+        })
     ];
 
     // Create status bar item
@@ -36,7 +124,7 @@ export function activate(context: vscode.ExtensionContext) {
     statusBarItem.show();
 
     // Add all to context
-    context.subscriptions.push(...commands, statusBarItem);
+    context.subscriptions.push(...commands, statusBarItem, treeView);
 
     // Show welcome message on first activation
     if (!context.globalState.get('checkpoints.welcomed')) {
@@ -282,6 +370,7 @@ async function saveCheckpoint() {
             
             if (success) {
                 vscode.window.showInformationMessage(`✅ Checkpoint "${name}" created successfully!`);
+                checkpointsProvider.refresh();
             } else {
                 vscode.window.showErrorMessage(`Failed to create checkpoint "${name}"`);
             }
@@ -308,6 +397,7 @@ async function saveQuickCheckpoint() {
             
             if (success) {
                 vscode.window.showInformationMessage(`✅ Quick checkpoint created: ${name}`);
+                checkpointsProvider.refresh();
             } else {
                 vscode.window.showErrorMessage(`Failed to create quick checkpoint`);
             }
@@ -394,6 +484,7 @@ async function restoreCheckpoint() {
                 
                 if (success) {
                     vscode.window.showInformationMessage(`✅ Restored from checkpoint "${selected.label}"`);
+                    checkpointsProvider.refresh();
                     
                     // Reload the workspace
                     vscode.commands.executeCommand('workbench.action.reloadWindow');
@@ -408,7 +499,7 @@ async function restoreCheckpoint() {
 }
 
 async function checkCodeQuality() {
-    vscode.window.showInformationMessage('✅ Code quality check feature is available. This extension works independently of quality gates!');
+    vscode.window.showInformationMessage('✅ Code quality check feature is not available.');
 }
 
 async function cleanCheckpoints() {
@@ -440,6 +531,69 @@ async function cleanCheckpoints() {
         });
     } catch (error) {
         vscode.window.showErrorMessage(`Failed to clean checkpoints: ${error}`);
+    }
+}
+
+async function restoreCheckpointFromTree(item: CheckpointItem) {
+    const manager = await getCheckpointManager();
+    if (!manager) {return;}
+
+    // Confirm restoration
+    const confirm = await vscode.window.showWarningMessage(
+        `Are you sure you want to restore "${item.name}"? This will overwrite your current code.`,
+        { modal: true },
+        'Yes, Restore'
+    );
+
+    if (confirm === 'Yes, Restore') {
+        try {
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: `Restoring checkpoint "${item.name}"...`,
+                cancellable: false
+            }, async () => {
+                const success = manager.restoreCheckpoint(item.name);
+                
+                if (success) {
+                    vscode.window.showInformationMessage(`✅ Restored from checkpoint "${item.name}"`);
+                    checkpointsProvider.refresh();
+                    
+                    // Reload the workspace
+                    vscode.commands.executeCommand('workbench.action.reloadWindow');
+                } else {
+                    vscode.window.showErrorMessage(`Failed to restore checkpoint "${item.name}"`);
+                }
+            });
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to restore checkpoint: ${error}`);
+        }
+    }
+}
+
+async function deleteCheckpointFromTree(item: CheckpointItem) {
+    const manager = await getCheckpointManager();
+    if (!manager) {return;}
+
+    // Confirm deletion
+    const confirm = await vscode.window.showWarningMessage(
+        `Are you sure you want to delete checkpoint "${item.name}"? This action cannot be undone.`,
+        { modal: true },
+        'Yes, Delete'
+    );
+
+    if (confirm === 'Yes, Delete') {
+        try {
+            const success = manager.deleteCheckpoint(item.name);
+            
+            if (success) {
+                vscode.window.showInformationMessage(`✅ Deleted checkpoint "${item.name}"`);
+                checkpointsProvider.refresh();
+            } else {
+                vscode.window.showErrorMessage(`Failed to delete checkpoint "${item.name}"`);
+            }
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to delete checkpoint: ${error}`);
+        }
     }
 }
 

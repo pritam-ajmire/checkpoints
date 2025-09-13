@@ -17,7 +17,10 @@
     "onCommand:checkpoints.list",
     "onCommand:checkpoints.restore",
     "onCommand:checkpoints.check",
-    "onCommand:checkpoints.clean"
+    "onCommand:checkpoints.clean",
+    "onCommand:checkpoints.refresh",
+    "onCommand:checkpoints.restoreFromTree",
+    "onCommand:checkpoints.deleteFromTree"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -55,6 +58,24 @@
       {
         "command": "checkpoints.clean",
         "title": "Clean Old Checkpoints",
+        "category": "Checkpoints",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "checkpoints.refresh",
+        "title": "Refresh Checkpoints",
+        "category": "Checkpoints",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "checkpoints.restoreFromTree",
+        "title": "Restore Checkpoint",
+        "category": "Checkpoints",
+        "icon": "$(history)"
+      },
+      {
+        "command": "checkpoints.deleteFromTree",
+        "title": "Delete Checkpoint",
         "category": "Checkpoints",
         "icon": "$(trash)"
       }
@@ -122,6 +143,25 @@
           "group": "navigation",
           "when": "checkpoints.enabled"
         }
+      ],
+      "view/title": [
+        {
+          "command": "checkpoints.refresh",
+          "when": "view == checkpointsView",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "checkpoints.restoreFromTree",
+          "when": "view == checkpointsView && viewItem == checkpoint",
+          "group": "inline"
+        },
+        {
+          "command": "checkpoints.deleteFromTree",
+          "when": "view == checkpointsView && viewItem == checkpoint",
+          "group": "inline"
+        }
       ]
     }
   },
@@ -161,5 +201,13 @@
     "productivity"
   ],
   "author": "Pritam Ajmire",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pritam-ajmire/checkpoints.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pritam-ajmire/checkpoints/issues"
+  },
+  "homepage": "https://github.com/pritam-ajmire/checkpoints#readme"
 }

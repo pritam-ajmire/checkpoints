@@ -52,7 +52,10 @@ suite('Extension Test Suite', () => {
 			'checkpoints.list',
 			'checkpoints.restore',
 			'checkpoints.check',
-			'checkpoints.clean'
+			'checkpoints.clean',
+			'checkpoints.refresh',
+			'checkpoints.restoreFromTree',
+			'checkpoints.deleteFromTree'
 		];
 
 		// Try alternative approach: test if commands can be executed
